@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <title>METIS iSEG</title>
+  </head>
+  <body>
+    <div id="app" v-bind:class="clRuninfo">
+      <h3>H445</h3>
+      Machine time: 2022/09/22 - 2022/10/01 <br>
+      nhq1 ch0 : UL main, ch1 : UL Dy11 <br>
+      nhq2 ch0 : UL Dy12, ch1 : LL main <br>
+      nhq3 ch0 : LL Dy11, ch1 : LL Dy12 <br>     
+      nhq4 ch0 : UR main, ch1 : UR Dy11 <br>
+      nhq5 ch0 : UR Dy12, ch1 : LR main <br>
+      nhq6 ch0 : LR Dy11, ch1 : LR Dy12      
+      <!-- iseg data -->
+       <div>{{timestamp}}</div> 
+    <div v-for="(url,fpname) in url_shpi">
+<!--    <h4>{{fpname}} high voltage</h4>  -->
+<!--    <div>{{timestamp}}</div> -->
+    <div v-if="$data.isReady[fpname]">
+    <table border="0">
+        <thead>
+          <th width=50>ch</th><th>INPUT</th><th>SET</th><th>VSET</th><th>VMON</th><th>IMON</th><th>VRAMP</th>
+	  <!-- <th>changed</th> -->
+        </thead>
+        <tbody>
+<!--          <tr v-for="(val,index) in shpi[fpname].VMON"> -->
+	    <tr v-for="(ch,index) in usingChannel(fpname)">
+	    <td class="headding-view" v-bind:class="cl[fpname][ch]">{{ch}}</td>
+	    <td><input type="text" v-model="$data.inv[fpname][ch]"
+		       class="digit-view digit-input"
+		       ></input>V</td>
+	    <td><button v-on:click="setv(fpname,ch)">Set</button></td>
+	    <td class="digit-view">{{shpi[fpname].D[ch]}} V</td>
+	    <td class="digit-view">{{shpi[fpname].U[ch]}} V</td>
+	    <td class="digit-view">{{shpi[fpname].I[ch]}} uA</td>
+	    <td class="digit-view">{{shpi[fpname].V[ch]}} V</t>
+            <td class="digit-view">{{shpi_chname[fpname][ch]}}</td>
+<!--	    <td>{{isChanged[index]}}</td>-->
+	  </tr>
+        </tbody>
+    </table>
+    </div>
+    </div>    
+      
+    </div>
+
+
+</div>
+
+        <!-- vue.js を読み込んでからVueオブジェクトを記載していく -->
+        <script src="https://cdn.jsdelivr.net/npm/vue@2.5.16/dist/vue.js"></script>
+	<script src="https://unpkg.com/axios/dist/axios.min.js"></script>        
+        <script>
+          // Vue オブジェクト
+          var app = new Vue({
+              el: '#app',
+              data() {
+                  return {
+                      // object 形式でプロパティを記述していく
+		      message: "hello vue",
+		      timestamp: "Timestamp is being prepared",
+		      monitor: [],
+		      preset: [],
+		      isChanged: [],
+		      input: {"ender" : "" , "header" : ""},
+		      rup: [],
+		      scr: [],
+		      scrrate: [],
+		      daqconfig: {},
+		      cl: {},
+		      inv: {},
+		      shpi: { },
+		      clStatus: "normal",
+		      clRuninfo: "",
+		      scrindex: [0,1],
+		      obj: {
+			  name: 'Vue',
+			  id: 1,
+			  lang: 'JavaScript'
+		      },
+		      url_shpi: { nhq1: '/nhq-1', nhq2: '/nhq-2', nhq3: '/nhq-3', nhq4: '/nhq-4', nhq5: '/nhq-5', nhq6: '/nhq-6' },
+		      isReady: { nhq1: false, nhq2: false, nhq3: false, nhq4: false, nhq5: false, nhq6: false  },
+		      shpiuse: { nhq1: [0,1], nhq2: [0,1], nhq3: [0,1], nhq4: [0,1], nhq5: [0,1], nhq6: [0,1]  },
+                      shpi_chname: {
+                          nhq1: ['UpperLeft Main', 'UpperLeft Dy11'],
+                          nhq2: ['UpperLeft Dy12', 'LowerLeft Main'],
+                          nhq3: ['LowerLeft Dy11', 'LowerLeft Dy12'],
+                          nhq4: ['UpperRight Main', 'UpperRight Dy11'],
+                          nhq5: ['UpperRight Dy12', 'LowerRight Main'],
+                          nhq6: ['LowerRight Dy11', 'LowerRight Dy12'],
+                      },
+                  };
+		  
+              },
+
+              // 算出プロパティ(キャッシュされる)
+              computed: {
+		  getScrindex: function () {
+		      for (i = 0; i < 10; ++i) {
+			  this.scrindex[i] = i;
+		      }
+		      return this.scrindex;
+		  },
+              },
+              // 監視プロパティ
+              watch: {
+
+              },
+              // 関数(キャッシュされない、都度評価される)
+              methods: {
+		  usingChannel: function (fpname) {
+		      return this.shpiuse[fpname];
+		      		      console.log(this.shpiuse[fpname]);
+		      		      return ch.filter( function (value, index) {
+		      			  for (let v of app.shpiuse[fpname]) {
+		      			      if (v == index) return true;
+		      			  }
+		      			  return false;
+		      		      }
+						      );
+		  },
+//		  setv: function() {
+//		      // alert('button clicked');
+//		      setval = Math.abs(this.preset[0]);
+//		      for (i = 1; i< w; ++i) {
+//			  setval += ":"+Math.abs(this.preset[i]);
+//		      }
+//		      url = this.urlbase + "/setv/" + setval;
+//		      axios.get(url);
+//		  },
+		  stopRamping: function() {
+		      url = this.urlbase + "/stopRamping";
+		      axios.get(url);
+		  },
+		  
+		  setv: function(fp,ch) {
+		      chch = ch+1
+		      url= this.url_shpi[fp] + "/set/"+chch+"/"+this.inv[fp][ch];
+		      axios.get(url);
+		  },
+		  monitorNHQ: function (fp) {
+		      axios.get(this.url_shpi[fp]+'/monitor/json')
+			  .then(response => {
+			      cl = [];
+
+			      result = response.data;
+			      result.on = [0,0,0,0];
+			      result.trip = [0,0,0,0];
+			      result.ramp = [0,0,0,0];
+			      result.ch = []
+//			      for (i = 0; i < 4; ++i) {
+//				  stat = result.STAT[i];
+//				  result.ch[i] = i;
+//				  result.on[i]   = (stat & (1<<0));
+//				  result.trip[i] = (stat & (1<<7));
+//				  result.ramp[i] = (stat & (1<<1)) | (stat & (1<<2));
+//				  if (result.trip[i]) {
+//				      cl[i] = "warning";
+//				  } else if (result.ramp[i]) {
+//				      cl[i] = "notify";
+//				  } else {
+//				      cl[i] = "normal";
+//				  }
+//			      }
+			      this.$set(this.shpi,fp,result);
+			      this.$set(this.cl,fp,cl);
+			      this.isReady[fp]= true;
+			      
+			  })
+		  },
+
+
+              },
+
+              // ライフサイクルフック ---------------------------------------------------
+              // https://jp.vuejs.org/v2/api/#beforeUpdate
+              beforeCreate() {
+              },
+              created() {
+		  
+              },
+              mounted() {
+		  for (var key in this.url_shpi) {
+		      this.inv[key] = [];
+		  }
+		  setInterval(function(){app.monitorNHQ('nhq1');},1000);
+		  setInterval(function(){app.monitorNHQ('nhq2');},1000);
+		  setInterval(function(){app.monitorNHQ('nhq3');},1000);
+		  setInterval(function(){app.monitorNHQ('nhq4');},1000);
+		  setInterval(function(){app.monitorNHQ('nhq5');},1000);
+		  setInterval(function(){app.monitorNHQ('nhq6');},1000);
+		  setInterval( function () {
+		      now = new Date();
+		      app.timestamp = now.getFullYear()
+			  + "/" + ("00" + (now.getMonth() + 1)).slice(-2)
+			  + "/" + ("00" + now.getDate()).slice(-2)
+			  + " " + ("00" + now.getHours()).slice(-2)
+			  + ":" + ("00" + now.getMinutes()).slice(-2)
+			  + ":" + ("00" + now.getSeconds()).slice(-2);
+		  }, 1000);
+              },
+              beforeUpdate() {
+
+              },
+              updated() {
+
+              },
+              activated() {
+
+              },
+              deactivated() {
+
+              },
+              beforeDestroy() {
+
+              },
+              destroyed() {
+
+              }
+          });
+        </script>
+	<style module>
+	  td {
+	      padding: 1px;
+	      margin: 0px;
+	      border-bottom: solid 1px #dddddd;
+	      font-size: 11pt;
+	  }
+	  .changed {
+	      background-color: #ffff00;	      
+	  }
+	  .warning {
+	      background-color: #aa0000;
+	      color: white;
+	      text-align: center
+	  }
+	  .normal {
+	      background-color: #8888bb;
+	      color: white;
+	      text-align: center;
+	  }
+	  .notify {
+	      background-color: #bbbb33;
+	      color: black;;
+	      text-align: center
+	  }
+	  .digit-view {
+	      width: 100px;
+	      text-align: right;
+	      padding: 5px;
+	      font-size: 11pt;
+	  }
+	  .digit-input {
+	      width: 90%;
+	      padding: 3px 3px;
+	      border-radius: 3px;
+	      border: 2px solid #ddd;
+	      box-sizing: border-box;
+	  }
+	  .text-input {
+	      width: 100%;
+	      padding: 3px 3px;
+	      border-radius: 3px;
+	      border: 2px solid #ddd;
+	      box-sizing: border-box;
+	  }
+	  .headding-view {
+	      width: 50px;
+	      text-align: center;
+	      font-weight: bold;;
+	      font-size: 11pt;
+	  }
+	</style>
+    </body>
+</html>

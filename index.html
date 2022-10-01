@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+      <meta charset="utf-8">
+        <title>Metis</title>
+    </head>
+    <body >
+        <div id="app" v-bind:class="clRuninfo">
+          <!-- このエリアにVue 形式の HTMLを記述していく(描画DOMエリア) -->
+<!--	    
+	    <p>{{message}}</p>
+    <p>Array のレンダリング</p>
+    <ul>
+        <li v-for="(item, index) in itemList">{{index}}: {{item}}</li>
+    </ul>
+    -->
+    {{note}}
+    <!--    <p>>Object のレンダリング</p>-->
+    <h2>H445</h2>
+    Machine time: 2022/09/22 - 2022/10/01
+    <!--
+    <table border="1">
+      <tbody>
+	<tr><th>HDN</th><th>PATH</th><th>On/Off</th><th>Free</th>
+	<tr v-for="(item) in daqconfig.hdlist">
+	  <td>{{item.hdn}}</td>
+	  <td>{{item.path}}</td>
+	  <td>{{item.onoff}}</td>
+	  <td>{{item.free}}</td>
+	</tr>
+      </tbody>
+    </table>
+    -->
+    <!-- scaler data -->
+    <h3>Silicon high voltage</h3>
+    <div>{{timestamp}}</div>
+    <div>{{fuga}}</div>
+    <table border="0">
+        <thead>
+          <th width=50>bus</th><th width=50>dev</th><th width=50>ch</th><th width=300>input</th><th>preset</th><th>vol</th><th>cur</th>
+	  <!-- <th>changed</th> -->
+        </thead>
+        <tbody>
+          <tr v-for="(item,index) in $data.mrc1.status">
+	    <td class="headding-view">{{item['BUS']}}</td>
+	    <td class="headding-view">{{item['DEV']}}</td>
+	    <td class="headding-view">{{item['CH']}}</td>
+	    <td><input type="text" v-model="$data.mrc1.control[index].preset"
+		       class="digit-view digit-input"
+		 v-bind:class="presetIsChanged(index)" ></input>(x0.1V)</td> 
+<!--		   v-bind:class="{changed : $data.mrc1.control[index].isChanged}" ></input>V</td> -->
+							   
+	    <td class="digit-view">{{item['RUP']}} (x0.1V)</td>
+	    <td class="digit-view">{{item['RU']}} (x0.1V)</td>
+	    <td class="digit-view">{{item['RI']}} nA</td>
+<!--	    <td>{{isChanged[index]}}</td>-->
+	  </tr>
+        </tbody>
+    </table>
+     <button v-on:click="setv()">Set Voltage</button>
+    
+
+<!--
+    <button v-on:click="stopRamping()">Stop Ranping</button>
+-->
+
+    </div>
+
+
+
+        <!-- vue.js を読み込んでからVueオブジェクトを記載していく -->
+        <script src="https://cdn.jsdelivr.net/npm/vue@2.5.16/dist/vue.js"></script>
+	<script src="https://unpkg.com/axios/dist/axios.min.js"></script>        
+        <script>
+          // Vue オブジェクト
+          var app = new Vue({
+              el: '#app',
+              data() {
+                  return {
+                      // object 形式でプロパティを記述していく
+		      note: "",
+		      message: "hello vue",
+		      timestamp: "Timestamp is being prepared",
+		      fuga: "",
+		      monitor: [],
+		      preset: [],
+		      isChanged: [],
+		      input: {"ender" : "" , "header" : ""},
+		      rup: [],
+		      scr: [],
+		      scrrate: [],
+		      daqconfig: {},
+		      clStatus: "normal",
+		      clRuninfo: "",
+		      scrname: [
+			  "accepted", "requested", "CsI-SQ","CsI-TR","YY1",
+			  "TTT","FC","NA","NA","NA",
+			  "NA","Si2","Pla","NA","NA",
+			  "NA","NA","NA","1Hz","Clock(1kHz)"
+		      ],
+		      scrindex: [0,1],
+		      itemList: [
+			  'huga',
+			  'hoge',
+			  'poyo'
+		      ],
+		      obj: {
+			  name: 'Vue',
+			  id: 1,
+			  lang: 'JavaScript'
+		      },
+		      urlbase : 'http://172.27.230.178:5042',
+		      runinfo_api : '/runinfo',
+                      mrc1_api : '/mrc1',
+                      scr_api : '/scr',	  
+ 		      mrc1: {status : [], control : [], init : 0 },
+                  };
+              },
+              // 算出プロパティ(キャッシュされる)
+              computed: {
+		  getScrindex: function () {
+		      for (i = 0; i < 10; ++i) {
+			  this.scrindex[i] = i;
+		      }
+		      return this.scrindex;
+		},
+		  presetIsChanged: function (index) {
+		  return function (index) {
+		    return {
+		    changed: this.mrc1.status[index].RUP != this.mrc1.control[index].preset
+		    }
+		  }
+		  },
+		  
+              },
+              // 監視プロパティ
+              watch: {
+
+              },
+              // 関数(キャッシュされない、都度評価される)
+              methods: {
+		  runningtime: function() {
+		      startDate = new Date;
+		      stopDate = new Date;
+		      startDate = new Date(this.daqconfig.runinfo.startdate);
+		      if (this.daqconfig.runinfo.runstatus == 'IDLE') {
+			  stopDate = new Date(this.daqconfig.runinfo.stopdate);
+		      } else {
+			  stopDate = new Date(this.timestamp);
+		      }
+		      return (stopDate.getTime() - startDate.getTime())/1000. + " sec";
+		  },
+		  setv: function() {
+		      // alert('button clicked');
+		      setvoltage = [];
+		      for (i = 0; i < this.mrc1.control.length; i++) {
+			  aCh = this.mrc1.status[i];
+			  preset = this.mrc1.control[i].preset;
+			  if (aCh['RUP'] != preset) {
+			      setvoltage.push({'bus': aCh.BUS, 'dev': aCh.DEV, 'addr': aCh.CH + 0, 'val': preset});
+			  }
+		      }
+		      postval = JSON.stringify(setvoltage);
+		      this.note = postval;
+		      axios.post(this.mrc1_api + '/api/mrc1/control/setv',postval);
+//		      setval = Math.abs(this.preset[0]);
+//		      for (i = 1; i< 4; ++i) {
+//			  setval += ":"+Math.abs(this.preset[i]);
+//		      }
+//		      url = this.urlbase + "/setv/" + setval;
+//		      axios.get(url);
+		  },
+//		  stopRamping: function() {
+//		      url = this.urlbase + "/stopRamping";
+//		      axios.get(url);
+//		  },
+		  // run controller
+		  stopRun: function() {
+		      url = "";
+		      if (this.daqconfig.runinfo.runstatus == 'NSSTA') {
+			  url = this.runinfo_api + "/control/stop/ender=NSSTA";
+		      } else  {
+			  url = this.runinfo_api + "/control/stop/ender=" + this.input.ender;
+		      }
+		      axios.get(url);
+		      this.input.ender = "";
+		  },
+		  startRun: function() {
+		      url = this.runinfo_api + "/control/start/header=" + this.input.header;
+		      axios.get(url);
+		  },
+		  nosaveStart: function() {
+		      url = this.runinfo_api + "/control/nssta";
+		      axios.get(url);
+		  },
+		  
+		  runnum: function (num) {
+		      return ("0000"+num).slice(-4);
+		  }
+              },
+
+              // ライフサイクルフック ---------------------------------------------------
+              // https://jp.vuejs.org/v2/api/#beforeUpdate
+              beforeCreate() {
+
+              },
+              created() {
+
+              },
+              mounted() {
+//		  axios
+//		      .get('http://192.168.253.152:5042/monitor/json')
+//		      .then(response => {
+//			  tmp = response.data;
+//			  app.monitor = [];
+//			  for (i = 0; i < 4; ++i) {
+//			      this.monitor.push({'RU': tmp['RU'][i],
+//						 'RUP': tmp['RUP'][i],
+//						 'RI': tmp['RI'][i],
+//						 'isRamping' : tmp['isRamping'][i]});
+//			      this.preset.push(tmp['RUP'][i]);
+//			  }
+//			  
+//		      });
+//		  // timer
+		  setInterval( function () {
+		      now = new Date();
+		      app.timestamp = now.getFullYear()
+			  + "/" + ("00" + (now.getMonth() + 1)).slice(-2)
+			  + "/" + ("00" + now.getDate()).slice(-2)
+			  + " " + ("00" + now.getHours()).slice(-2)
+			  + ":" + ("00" + now.getMinutes()).slice(-2)
+			  + ":" + ("00" + now.getSeconds()).slice(-2);
+		  }, 1000)
+		  // silicon 
+		  setInterval( function () {
+		      axios.get(app.scr_api+'/monitor/gto_scaler.json')
+			  .then(response => {
+			      scrold = JSON.parse(JSON.stringify(app.scr));
+			      app.scr = JSON.parse(JSON.stringify(response.data["scr"]));
+			      app.scrrate = Array(20);
+			      timediff = app.scr[19] - scrold[19];
+			      for (i = 0; i < 20; ++i) {
+				  app.scrrate[i] = (Math.round((app.scr[i] - scrold[i])/timediff*1000)/1000).toFixed(3);
+			      }
+			      
+			  });
+		  },1000);
+		      
+		  setInterval (function () {
+		      axios.get(app.mrc1_api+'/api/mrc1/status.json')
+			  .then(response => {
+			      mrc1 = JSON.parse(JSON.stringify(response.data));
+			      index = 0;
+			      buses = Object.keys(mrc1);
+			      for (ibus = 0; ibus < buses.length; ++ibus) {
+				  bus = buses[ibus];
+				  aBus = mrc1[bus];
+				  devs = Object.keys(aBus);
+				  for (idev = 0; idev < devs.length; ++idev) {
+				      dev = devs[idev];
+				    aDev = aBus[dev];
+				    for (ch = 0; ch < 4; ++ch) {
+					app.mrc1.status[index] = {};
+					aCh = app.mrc1.status[index];
+				    aCh['BUS'] = bus;
+				    aCh['DEV'] = dev;
+				    aCh['CH'] = ch;
+					aCh['RU'] = (aDev[32+ch]).toFixed(1);
+					aCh['RUP'] = (aDev[ch]).toFixed(1);
+					aCh['RI'] = (aDev[50+ch]).toFixed(3);
+				    index++;
+				  }
+				}
+			      }
+			      if (app.mrc1.init  == 0) {
+				for (i = 0; i < Object.keys(app.mrc1.status).length; ++i) {
+				  app.mrc1.control[i] = {};
+				  app.mrc1.control[i].preset = app.mrc1.status[i]['RUP'];
+				}
+				app.mrc1.init = 1;
+			      } 
+			  });
+		  } ,1000);
+
+		  setInterval (function () {
+		      axios.get(app.runinfo_api + '/monitor/runinfo.json')
+			  .then(response => {
+			      app.daqconfig = response.data;
+			      status = app.daqconfig.runinfo.runstatus;
+			      if (status == 'START') {
+				  app.clStatus = "normal"
+				  if (app.scrrate[0] < 0.001) {
+				      if (app.clRuninfo == "normal") {
+					  app.clRuninfo = "warning";
+				      } else {
+					  app.clRuninfo = "normal";
+				      }
+				  } else {
+				      app.clStatus = "normal";
+				      app.clRuninfo = "";
+				  }
+			      }
+			      if (status == 'IDLE') {
+				  app.clStatus = "notify";
+				  app.clRuninfo = "";
+			      }
+			      if (status == 'NSSTA') app.clStatus = "warning";
+			  });
+		  } ,1000);
+		  
+              },
+              beforeUpdate() {
+
+              },
+              updated() {
+
+              },
+              activated() {
+
+              },
+              deactivated() {
+
+              },
+              beforeDestroy() {
+
+              },
+              destroyed() {
+
+              }
+              // ライフサイクルフック ---------------------------------------------------
+          });
+        </script>
+	<style module>
+	  td {
+	      padding: 1px;
+	      margin: 0px;
+	      border-bottom: solid 1px #dddddd;
+	  }
+	  .changed {
+	      background-color: #ffff00;	      
+	  }
+	  .warning {
+	      background-color: #aa0000;
+	      color: white;
+	      text-align: center
+	  }
+	  .normal {
+	      background-color: #8888bb;
+	      color: white;
+	      text-align: center;
+	  }
+	  .notify {
+	      background-color: #bbbb33;
+	      color: black;;
+	      text-align: center
+	  }
+	  .digit-view {
+	      width: 100px;
+	      text-align: right;
+	      padding: 5px;
+	      font-size: 11pt;
+	  }
+	  .digit-input {
+	      width: 80%;
+	      padding: 5px 5px;
+	      border-radius: 3px;
+	      border: 2px solid #ddd;
+	      box-sizing: border-box;
+	  }
+	  .text-input {
+	      width: 80%;
+	      padding: 5px 5px;
+	      border-radius: 3px;
+	      border: 2px solid #ddd;
+	      box-sizing: border-box;
+	  }
+	  .headding-view {
+	      width: 50px;
+	      text-align: center;
+	      font-weight: bold;;
+	  }
+	</style>
+    </body>
+</html>
